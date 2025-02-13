@@ -49,9 +49,9 @@ release SEMVER_PORTION: _status_clean build integration_test
 	GIT_VERSION="v$VERSION"
 	echo $GIT_VERSION
 
-	docker tag blainehansen/postgres_migrator blainehansen/postgres_migrator:$VERSION
-	docker push blainehansen/postgres_migrator:$VERSION
-	docker push blainehansen/postgres_migrator:latest
+	docker tag zaksingh/postgres_migrator zaksingh/postgres_migrator:$VERSION
+	docker push zaksingh/postgres_migrator:$VERSION
+	docker push zaksingh/postgres_migrator:latest
 	git commit -am $GIT_VERSION
 	git tag $GIT_VERSION
 	cargo publish
