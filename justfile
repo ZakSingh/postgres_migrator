@@ -11,14 +11,14 @@ full_test:
 	docker exec -it migrator-dev cargo test -- --ignored
 
 build:
-	docker build -f release.Dockerfile -t blainehansen/postgres_migrator .
+	docker build -f release.Dockerfile -t zaksingh/postgres_migrator .
 
 integration_test: test full_test build
 	#!/usr/bin/env bash
 	set -euo pipefail
 	PG_URL='postgres://experiment_user:asdf@localhost:5432/experiment-db?sslmode=disable'
-	docker run --rm -it --network host -u $(id -u ${USER}):$(id -g ${USER}) -v $(pwd):/working -e PG_URL=$PG_URL blainehansen/postgres_migrator migrate
-	docker run --rm -it --network host -u $(id -u ${USER}):$(id -g ${USER}) -v $(pwd):/working -e PG_URL=$PG_URL blainehansen/postgres_migrator --schema-directory schemas/schema.1 diff schema migrations
+	docker run --rm -it --network host -u $(id -u ${USER}):$(id -g ${USER}) -v $(pwd):/working -e PG_URL=$PG_URL zaksingh/postgres_migrator migrate
+	docker run --rm -it --network host -u $(id -u ${USER}):$(id -g ${USER}) -v $(pwd):/working -e PG_URL=$PG_URL zaksingh/postgres_migrator --schema-directory schemas/schema.1 diff schema migrations
 
 compose_test:
 	#!/usr/bin/env bash

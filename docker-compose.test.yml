@@ -1,6 +1,6 @@
 services:
   postgres_migrator:
-    image: blainehansen/postgres_migrator
+    image: zaksingh/postgres_migrator
     container_name: postgres_migrator
     depends_on:
       - db
