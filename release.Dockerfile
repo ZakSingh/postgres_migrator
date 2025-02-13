@@ -12,7 +12,6 @@ RUN cargo install --target x86_64-unknown-linux-musl --path .
 
 
 FROM python:alpine
-RUN apk update
 RUN apk add git
 RUN pip install git+https://github.com/joshainglis/migra.git psycopg2-binary~=2.9.3 setuptools
 
