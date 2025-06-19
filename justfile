@@ -5,10 +5,10 @@ dev:
 	docker exec -it migrator-dev bash
 
 test:
-	docker exec -it migrator-dev cargo test
+	docker exec migrator-dev cargo test
 
 full_test:
-	docker exec -it migrator-dev cargo test -- --ignored
+	docker exec migrator-dev cargo test -- --ignored
 
 build:
 	docker build -f release.Dockerfile -t zaksingh/postgres_migrator .
