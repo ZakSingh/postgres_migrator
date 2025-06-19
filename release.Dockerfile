@@ -1,20 +1,15 @@
 FROM rust:latest AS builder
-# Install musl toolchain
 
 WORKDIR /usr/src/
-RUN rustup target add x86_64-unknown-linux-musl
-RUN apt update && apt install -y musl-tools musl-dev
-RUN apt-get install -y build-essential
-RUN yes | apt install gcc-x86-64-linux-gnu
+RUN apt update && apt install -y build-essential pkg-config libssl-dev
 
 RUN USER=root cargo new postgres_migrator
 WORKDIR /usr/src/postgres_migrator
 COPY Cargo.toml Cargo.lock ./
-ENV RUSTFLAGS='-C linker=x86_64-linux-gnu-gcc'
-RUN cargo build --target x86_64-unknown-linux-musl --release
+RUN cargo build --release
 
 COPY src ./src
-RUN cargo install --target x86_64-unknown-linux-musl --path .
+RUN cargo install --path .
 
 
 FROM python:alpine
