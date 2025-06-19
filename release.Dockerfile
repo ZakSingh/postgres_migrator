@@ -12,8 +12,8 @@ COPY src ./src
 RUN cargo install --path .
 
 
-FROM python:alpine
-RUN apk add git
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN pip install git+https://github.com/joshainglis/migra.git psycopg2-binary~=2.9.3 setuptools
 
 COPY --from=builder /usr/local/cargo/bin/postgres_migrator /usr/bin/
