@@ -3,6 +3,33 @@ use chrono::Utc;
 use postgres::Config;
 use anyhow::{anyhow, Result, Context};
 
+fn create_tls_connector(cert_path: &str) -> Result<postgres_native_tls::MakeTlsConnector> {
+	let cert_pem = fs::read(cert_path)
+		.with_context(|| format!("failed to read certificate file: {}", cert_path))?;
+	
+	let cert = native_tls::Certificate::from_pem(&cert_pem)
+		.with_context(|| "failed to parse certificate")?;
+	
+	let tls_connector = native_tls::TlsConnector::builder()
+		.add_root_certificate(cert)
+		.build()
+		.with_context(|| "failed to build TLS connector")?;
+	
+	Ok(postgres_native_tls::MakeTlsConnector::new(tls_connector))
+}
+
+fn connect_with_tls_option(config: &Config, tls_cert_path: &Option<String>) -> Result<postgres::Client> {
+	match tls_cert_path {
+		Some(cert_path) => {
+			let tls_connector = create_tls_connector(cert_path)?;
+			config.connect(tls_connector).with_context(|| "Failed to connect to postgres with TLS")
+		},
+		None => {
+			config.connect(postgres::NoTls).with_context(|| "Failed to connect to postgres without TLS")
+		}
+	}
+}
+
 fn create_timestamp() -> String {
 	Utc::now().format("%Y%m%d%H%M%S").to_string()
 }
@@ -403,8 +430,8 @@ fn compute_diff(source: &Config, target: &Config, exclude_privileges: bool, sche
 }
 
 
-fn apply_sql_files(config: &Config, sql_files: Vec<PathBuf>) -> Result<()> {
-	let mut client = config.connect(postgres::NoTls)?;
+fn apply_sql_files(config: &Config, sql_files: Vec<PathBuf>, tls_cert_path: &Option<String>) -> Result<()> {
+	let mut client = connect_with_tls_option(config, tls_cert_path)?;
 	for sql_file in sql_files {
 		let mut file = fs::File::open(sql_file)?;
 		let mut query = String::new();
@@ -428,9 +455,9 @@ fn command_generate(args: &Args, raw_description: &str, is_onboard: bool) -> Res
 	let current_version = create_timestamp();
 
 	let source = TempDb::new(&dbname, "migrations", &args.pg_url)?;
-	apply_sql_files(&source.config, migration_files.into_iter().map(|migration_file| migration_file.file_path).collect())?;
+	apply_sql_files(&source.config, migration_files.into_iter().map(|migration_file| migration_file.file_path).collect(), &args.tls_cert_path)?;
 	let target = TempDb::new(&dbname, "schema", &args.pg_url)?;
-	apply_sql_files(&target.config, list_sql_files(&args.schema_directory)?)?;
+	apply_sql_files(&target.config, list_sql_files(&args.schema_directory)?, &args.tls_cert_path)?;
 
 	let generated_migration = compute_diff(&source.config, &target.config, args.exclude_privileges, &args.schema_arg)?;
 
@@ -576,7 +603,7 @@ fn ensure_db(args: &Args, dbname: &str, base_config: &Config, backend: Backend, 
 			let mut client = temp.config.connect(postgres::NoTls)?;
 			create_versions_table(&mut client)?;
 		}
-		apply_sql_files(&temp.config, list_sql_files(dir)?)?;
+		apply_sql_files(&temp.config, list_sql_files(dir)?, &args.tls_cert_path)?;
 
 		let config = temp.config.clone();
 		Ok((Some(temp), config))
@@ -672,6 +699,10 @@ struct RawArgs {
 	#[clap(long, env = "PG_URL", parse(try_from_str = config_try_from_str))]
 	pg_url: Config,
 
+	/// path to TLS certificate file (e.g., ca-certificates/us-east-2-bundle.pem)
+	#[clap(long)]
+	tls_cert_path: Option<String>,
+
 	/// opposite of migra [`--with-privileges`](https://github.com/djrobstep/migra/blob/master/docs/options.md#--with-privileges)
 	#[clap(long)]
 	exclude_privileges: bool,
@@ -701,6 +732,7 @@ struct RawArgs {
 #[derive(Debug)]
 struct Args {
 	pg_url: Config,
+	tls_cert_path: Option<String>,
 	exclude_privileges: bool,
 	schema_arg: Option<SchemaArg>,
 	schema_directory: String,
@@ -710,7 +742,7 @@ struct Args {
 
 impl Args {
 	fn from_raw_args(raw_args: RawArgs) -> Result<Args> {
-		let RawArgs{pg_url, exclude_privileges, schema, exclude_schema, schema_directory, migrations_directory, command} = raw_args;
+		let RawArgs{pg_url, tls_cert_path, exclude_privileges, schema, exclude_schema, schema_directory, migrations_directory, command} = raw_args;
 
 		let schema_arg = match (schema, exclude_schema) {
 			(Some(schema), Some(exclude_schema)) => {
@@ -722,7 +754,7 @@ impl Args {
 		};
 
 		Ok(Args {
-			pg_url, exclude_privileges,
+			pg_url, tls_cert_path, exclude_privileges,
 			schema_directory, migrations_directory,
 			schema_arg,
 			command,
@@ -819,6 +851,7 @@ fn test_full_no_onboard() -> Result<()> {
 	fn get_args(schema_directory: &'static str) -> Args {
 		Args {
 			pg_url: get_config(),
+			tls_cert_path: None,
 			schema_directory: schema_directory.to_string(),
 			migrations_directory: DEFAULT_MIGRATIONS_DIRECTORY.to_string(),
 			command: Command::Clean,
@@ -895,6 +928,7 @@ fn test_full_with_onboard() -> Result<()> {
 	fn get_args(schema_directory: &'static str) -> Args {
 		Args {
 			pg_url: get_config(),
+			tls_cert_path: None,
 			schema_directory: schema_directory.to_string(),
 			migrations_directory: DEFAULT_MIGRATIONS_DIRECTORY.to_string(),
 			command: Command::Clean,
@@ -932,7 +966,7 @@ fn test_full_with_onboard() -> Result<()> {
 	assert!(migration.is_onboard);
 	assert!(migration.previous_version == get_null_string());
 	// manually apply the schema
-	apply_sql_files(&get_config(), vec![PathBuf::from("schemas/schema.1/schema.sql")])?;
+	apply_sql_files(&get_config(), vec![PathBuf::from("schemas/schema.1/schema.sql")], &None)?;
 	// apply migrations, which should work
 	command_migrate(&get_args(""), &mut get_config().connect(postgres::NoTls)?, false, false)?;
 	client.batch_execute("select id, name, color from fruit")?;
