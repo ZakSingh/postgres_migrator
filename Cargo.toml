@@ -1,6 +1,6 @@
 [package]
 name = "postgres_migrator"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 license = "MIT"
 authors = ["Blaine Hansen <faichenshing@gmail.com>"]
@@ -14,8 +14,9 @@ categories = ["command-line-utilities", "database"]
 
 [dependencies]
 postgres = "0.19"
-postgres-native-tls = "0.5"
-native-tls = "0.2"
+pem = "3.0"
+openssl = "0.10"
+postgres-openssl = "0.5"
 chrono = "0.4"
 regex = "1"
 anyhow = "1.0"
